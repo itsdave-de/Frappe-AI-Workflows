@@ -6,7 +6,7 @@ from frappe.model.document import Document
 import json
 from erpnext.controllers.accounts_controller import get_taxes_and_charges
 if 'frappe_goes_paperless' in frappe.get_installed_apps():
-	from frappe_goes_paperless.frappe_goes_paperless.tools import get_paperless_settings
+    from frappe_goes_paperless.frappe_goes_paperless.tools import get_paperless_settings
 
 
 class AIQuery(Document):
@@ -365,34 +365,34 @@ def create_purchase_invoice(doc):
             purchase_invoice.set("taxes", taxes_and_charges)
         purchase_invoice.save()
 
-		# If paperless app is installed:
-		if 'frappe_goes_paperless' in frappe.get_installed_apps():
-			# Attach link to paperless preview
-			paperless_document_id = frappe.db.get_value(
-				"Paperless Document",
-				{"name": doc.get("paperless_doc")},
-				"paperless_document_id",
-			)
-			if paperless_document_id:
-				paperless_server, _ = get_paperless_settings()
-				file_url = (
-					f"{paperless_server}/api/documents/{paperless_document_id}/preview/"
-				)
-				if not frappe.db.exists(
-					"File",
-					{
-						"file_url": file_url,
-						"attached_to_doctype": "Purchase Invoice",
-						"attached_to_name": purchase_invoice.name,
-					},
-				):
-					file_doc = frappe.new_doc("File")
-					file_doc.file_url = file_url
-					file_doc.file_name = "View Document"
-					file_doc.is_private = 1
-					file_doc.attached_to_doctype = "Purchase Invoice"
-					file_doc.attached_to_name = purchase_invoice.name
-					file_doc.save()
+        # If paperless app is installed:
+        if 'frappe_goes_paperless' in frappe.get_installed_apps():
+            # Attach link to paperless preview
+            paperless_document_id = frappe.db.get_value(
+                "Paperless Document",
+                {"name": doc.get("paperless_doc")},
+                "paperless_document_id",
+            )
+            if paperless_document_id:
+                paperless_server, _ = get_paperless_settings()
+                file_url = (
+                    f"{paperless_server}/api/documents/{paperless_document_id}/preview/"
+                )
+                if not frappe.db.exists(
+                    "File",
+                    {
+                        "file_url": file_url,
+                        "attached_to_doctype": "Purchase Invoice",
+                        "attached_to_name": purchase_invoice.name,
+                    },
+                ):
+                    file_doc = frappe.new_doc("File")
+                    file_doc.file_url = file_url
+                    file_doc.file_name = "View Document"
+                    file_doc.is_private = 1
+                    file_doc.attached_to_doctype = "Purchase Invoice"
+                    file_doc.attached_to_name = purchase_invoice.name
+                    file_doc.save()
 
         # Update AI Query with the Purchase Invoice document
         ai_query_doc = frappe.get_doc("AI Query", doc.get("name"))
