@@ -2,7 +2,7 @@ frappe.ui.form.on("AI Query", {
     refresh: function(frm) {
         frm.add_custom_button(__('Create Supplier'), () => {
             frappe.call({
-                method: 'frappe_goes_paperless.frappe_goes_paperless.doctype.ai_query.ai_query.create_supplier',
+                method: 'ai_workflows.ai_workflows.doctype.ai_query.ai_query.create_supplier',
                 args: {
                     doc: frm.doc
                 },
@@ -26,7 +26,7 @@ frappe.ui.form.on("AI Query", {
 
         frm.add_custom_button(__('Create Purchase Invoice'), () => {
             frappe.call({
-                method: 'frappe_goes_paperless.frappe_goes_paperless.doctype.ai_query.ai_query.create_purchase_invoice',
+                method: 'ai_workflows.ai_workflows.doctype.ai_query.ai_query.create_purchase_invoice',
                 args: {
                     doc: frm.doc
                 },
