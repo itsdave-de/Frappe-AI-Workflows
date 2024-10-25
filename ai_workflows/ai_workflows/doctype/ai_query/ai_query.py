@@ -4,10 +4,14 @@
 import json
 import re
 import frappe
+import random
+import string
 from frappe.model.document import Document
 from frappe.utils.password import get_decrypted_password
+from frappe.utils import getdate, validate_email_address, today
 from openai import OpenAI
 from erpnext.controllers.accounts_controller import get_taxes_and_charges
+
 if 'frappe_goes_paperless' in frappe.get_installed_apps():
     from frappe_goes_paperless.frappe_goes_paperless.tools import get_paperless_settings
 
@@ -149,7 +153,7 @@ def use_openai(doc, prompt, ai_name, background=True):
     new_query.save()
     # Load document paperless and set status
     doc_paperless = frappe.get_doc("Paperless Document", doc.get("name"))
-    doc_paperless.status = "AI-Response-Recieved"
+    doc_paperless.status = "AI-Response-Received"
     doc_paperless.save()
     frappe.db.commit()
     # Return success
@@ -220,26 +224,28 @@ def create_supplier(doc):
     ai_query_doc.supplier = supplier.name
     ai_query_doc.save()
 
-    # Commit database changes
-    frappe.db.commit()
 
     # Create or update Address
-    address_name = create_or_update_address(supplier, invoice_details)
+    supplier = create_or_update_address(supplier, invoice_details)
 
     # Create or update Contact with the address reference
-    create_or_update_contact(supplier, invoice_details, address_name)
+    supplier = create_or_update_contact(supplier, invoice_details, supplier.supplier_primary_address)
 
     # Commit database and return message
-    frappe.db.commit()
+    supplier.save()
+
     return return_msg
 
 
 def create_or_update_contact(supplier, invoice_details, address_name):
+    print("create_or_update_contact")
     contact_person = invoice_details.get(
         "SupplierContactPerson", supplier.supplier_name
     ).split(" ")
     contact_phone = invoice_details.get("SupplierContactPhone", "")
     contact_email = invoice_details.get("SupplierContactEmail", "")
+
+    
 
     # Fetch the contact based on the first and last name
     contact_name = frappe.db.get_value(
@@ -267,7 +273,8 @@ def create_or_update_contact(supplier, invoice_details, address_name):
             contact.append("phone_nos", {"phone": contact_phone, "is_primary_phone": 1})
 
         if contact_email:
-            contact.append("email_ids", {"email_id": contact_email, "is_primary": 1})
+            if validate_email_address(contact_email):
+                contact.append("email_ids", {"email_id": contact_email, "is_primary": 1})
 
         contact.insert()
         contact_name = contact.name  # Ensure we set the correct contact name
@@ -321,12 +328,14 @@ def create_or_update_contact(supplier, invoice_details, address_name):
 
     # Assign the contact name to supplier's primary contact
     supplier.supplier_primary_contact = contact_name
-    supplier.save()
+    return supplier
 
 
 
 def create_or_update_address(supplier, invoice_details):
-    address = frappe.db.get_value(
+    print("create_or_update_address")
+    # Fetch the address name if it exists
+    address_name = frappe.db.get_value(
         "Address",
         {
             "address_line1": invoice_details["SupplierAddress"]["Street"],
@@ -335,29 +344,34 @@ def create_or_update_address(supplier, invoice_details):
             "country": get_country(invoice_details["SupplierAddress"]["Country"]),
         },
     )
-    if not address:
-        address = frappe.new_doc("Address")
-        address.address_title = f"{supplier.supplier_name} - Main Address"
-        address.address_line1 = invoice_details["SupplierAddress"]["Street"]
-        address.city = invoice_details["SupplierAddress"]["City"]
-        address.pincode = invoice_details["SupplierAddress"]["PostalCode"]
-        address.country = get_country(invoice_details["SupplierAddress"]["Country"])
-        address.append(
+
+    if not address_name:
+        print("Creating new address")
+        # Create a new address document
+        address_doc = frappe.new_doc("Address")
+        address_doc.address_title = f"{supplier.supplier_name} - Main Address"
+        address_doc.address_line1 = invoice_details["SupplierAddress"]["Street"]
+        address_doc.city = invoice_details["SupplierAddress"]["City"]
+        address_doc.pincode = invoice_details["SupplierAddress"]["PostalCode"]
+        address_doc.country = get_country(invoice_details["SupplierAddress"]["Country"])
+        address_doc.append(
             "links", {"link_doctype": "Supplier", "link_name": supplier.name}
         )
-        address.insert()
+        address_doc.insert()
     else:
-        address_doc = frappe.get_doc("Address", address)
+        # If the address exists, load the address document
+        address_doc = frappe.get_doc("Address", address_name)
+        # Check if the supplier link already exists
         if not any(link.link_name == supplier.name for link in address_doc.links):
             address_doc.append(
                 "links", {"link_doctype": "Supplier", "link_name": supplier.name}
             )
             address_doc.save()
 
-    supplier.supplier_primary_address = address.name
-    supplier.save()
+    # Update the supplier's primary address with the name of the address
+    supplier.supplier_primary_address = address_doc.name
+    return supplier
 
-    return address.name
 
 
 @frappe.whitelist()
@@ -411,10 +425,7 @@ def create_purchase_invoice(doc):
             {
                 "bill_no": invoice_details["InvoiceNumber"],
                 "supplier": supplier_doc.name,
-                "docstatus": [
-                    "!=",
-                    2,
-                ],  # Exclude canceled invoices (docstatus 2 means canceled)
+                "docstatus": ["!=", 2],  # Exclude canceled invoices
             },
         )
         if existing_purchase_invoice:
@@ -423,27 +434,62 @@ def create_purchase_invoice(doc):
             )
             return
 
+       # Extract due date and posting date
+        invoice_date = invoice_details.get("InvoiceDate")
+        due_date = payment_information.get("PaymentDueDate", invoice_date)
+
+        # Validate and parse invoice_date
+        try:
+            invoice_date_parsed = getdate(invoice_date)
+        except Exception:
+            frappe.msgprint(f"Invalid InvoiceDate '{invoice_date}', using current date.")
+            invoice_date = today()
+            invoice_date_parsed = getdate(invoice_date)
+
+        # Validate and parse due_date
+        try:
+            due_date_parsed = getdate(due_date)
+        except Exception:
+            frappe.msgprint(f"Invalid PaymentDueDate '{due_date}', using current date.")
+            due_date = today()
+            due_date_parsed = getdate(due_date)
+
+        # Ensure due_date is not before invoice_date
+        if due_date_parsed < invoice_date_parsed:
+            due_date = invoice_date
+
         # Create a new Purchase Invoice
+
         purchase_invoice = frappe.get_doc(
             {
                 "doctype": "Purchase Invoice",
                 "supplier": supplier_doc.name,
-                "posting_date": invoice_details["InvoiceDate"],
-                "due_date": payment_information.get("PaymentDueDate"),  # Optional field
+                "due_date": due_date,
                 "bill_no": invoice_details["InvoiceNumber"],
                 "bill_date": invoice_details["InvoiceDate"],
                 "items": [],
             }
         )
+        # Get destination Item Group for new Items
+        item_group = frappe.db.get_single_value(
+            "AI Workflow Purchase Invoice Settings", "default_item_group"
+        )
 
         # Check and add items to the Purchase Invoice
         for item in items_purchased:
+
+            item_number = item.get("ItemNumber", None)
+            # If ItemNumber is missing, generate a new one
+            if not item_number:
+                item_number = generate_item_number()
+
             # Ensure the item exists, create if not
             item_doc_name = create_or_get_item(
-                item["ItemNumber"],
+                item_number,
                 item["ItemName"],
                 item["Description"],
                 supplier_doc.name,
+                item_group=item_group,
             )
             item_doc = frappe.get_doc("Item", item_doc_name)
 
@@ -498,6 +544,68 @@ def create_purchase_invoice(doc):
         # Save the Purchase Invoice, which fills taxes_and_charges
         purchase_invoice.insert()
 
+        # Check if the InvoiceDate is different from today's date, and set posting_date if so
+        if getdate(purchase_invoice.posting_date) != getdate(
+            invoice_details["InvoiceDate"]
+        ):
+            # If different, enable set_posting_time and update posting_date
+            purchase_invoice.set_posting_time = 1
+            purchase_invoice.posting_date = invoice_details["InvoiceDate"]
+            purchase_invoice.save()
+
+        # --- Begin code to handle PaymentMethod and Payment Schedule ---
+
+        # Extract PaymentMethod from payment_information
+        payment_method_string = payment_information.get("PaymentMethod")
+
+        # Translate PaymentMethod using AI Workflow Payment Terms Assignment
+        payment_term = None
+        ai_settings = frappe.get_single("AI Workflow Purchase Invoice Settings")
+        if ai_settings.payment_terms_assignments:
+            for assignment in ai_settings.payment_terms_assignments:
+                if (
+                    assignment.ai_response_paymentmethod_string.lower().strip()
+                    == payment_method_string.lower().strip()
+                ):
+                    payment_term = assignment.payment_term
+                    break
+
+        if not payment_term:
+            frappe.throw(
+                f"No payment term found for payment method '{payment_method_string}'"
+            )
+
+        # Validate that payment_term exists
+        if not frappe.db.exists("Payment Term", payment_term):
+            frappe.throw(f"Payment Term '{payment_term}' does not exist in the system.")
+
+        # Set allocate_payment_based_on_payment_terms to 1
+        purchase_invoice.allocate_payment_based_on_payment_terms = 1
+
+        # Clear existing payment schedule entries
+        purchase_invoice.set("payment_schedule", [])
+
+        # Calculate payment_amount
+        payment_amount = purchase_invoice.grand_total  # Assuming full amount
+
+        # Get due_date
+        due_date =  purchase_invoice.due_date or payment_information.get("PaymentDueDate")
+
+        # Create payment schedule entry
+        payment_schedule_entry = {
+            "doctype": "Payment Schedule",
+            "payment_term": payment_term,
+            "due_date": due_date,
+            "invoice_portion": 100,
+            "payment_amount": payment_amount,
+        }
+        purchase_invoice.append("payment_schedule", payment_schedule_entry)
+
+        # Save the purchase_invoice with the new payment schedule
+        purchase_invoice.save()
+
+        # --- End code to handle PaymentMethod and Payment Schedule ---
+
         # Apply Purchase Taxes and Charges Template
         if purchase_invoice.taxes_and_charges:
             taxes_and_charges = get_taxes_and_charges(
@@ -505,10 +613,16 @@ def create_purchase_invoice(doc):
                 purchase_invoice.taxes_and_charges,
             )
             purchase_invoice.set("taxes", taxes_and_charges)
+        
+        #Link to Paperless Document
+        paperless_doc_name = doc.get("paperless_doc")
+        if paperless_doc_name:
+            purchase_invoice.custom_paperless_document = paperless_doc_name
+
         purchase_invoice.save()
 
         # If paperless app is installed:
-        if 'frappe_goes_paperless' in frappe.get_installed_apps():
+        if "frappe_goes_paperless" in frappe.get_installed_apps():
             # Attach link to paperless preview
             paperless_document_id = frappe.db.get_value(
                 "Paperless Document",
@@ -550,6 +664,8 @@ def create_purchase_invoice(doc):
 
     except Exception as e:
         frappe.throw(f"An unexpected error occurred: {str(e)}")
+
+
 
 
 def create_or_get_item(
@@ -610,3 +726,41 @@ def create_purchase_invoice_doc_item(item_code, qty, uom, price_list_rate):
             "price_list_rate": price_list_rate,
         }
     )
+
+def update_paperless_document_status(doc, method):
+    """
+    Updates the matching Paperless Document when a Purchase Invoice is submitted or canceled.
+    """
+    paperless_doc_name = doc.custom_paperless_document
+    if not paperless_doc_name:
+        frappe.msgprint("No Paperless Document linked to this Purchase Invoice.")
+        return
+
+    try:
+        paperless_doc = frappe.get_doc("Paperless Document", paperless_doc_name)
+    except frappe.DoesNotExistError:
+        frappe.throw(f"Paperless Document '{paperless_doc_name}' not found.")
+        return
+
+    if method == "on_submit":
+        # Update fields upon submission
+        paperless_doc.status = "Workflow Successful"
+        paperless_doc.frappe_doctype = "Purchase Invoice"
+        paperless_doc.frappe_document = doc.name
+    elif method == "on_cancel":
+        # Update status upon cancellation
+        paperless_doc.status = "Destination Document Cancelled"
+        # Optionally clear fields
+        # paperless_doc.frappe_doctype = ""
+        # paperless_doc.frappe_document = ""
+    else:
+        # Handle other methods if necessary
+        pass
+
+    # Save changes
+    paperless_doc.save(ignore_permissions=True)
+
+def generate_item_number():
+    # Generate a random combination of 10 digits and letters
+    random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
+    return f"AI-{random_part}"

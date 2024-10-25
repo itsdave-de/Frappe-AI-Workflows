@@ -1,0 +1,61 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2024-10-10 06:24:47.684642",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "item_settings_section",
+  "default_item_group",
+  "payment_terms_section",
+  "payment_terms_assignments"
+ ],
+ "fields": [
+  {
+   "description": "On creation of Purchase Invoices, missing Items are created inside this Item Group.",
+   "fieldname": "default_item_group",
+   "fieldtype": "Link",
+   "label": "Default Item Group",
+   "options": "Item Group"
+  },
+  {
+   "fieldname": "item_settings_section",
+   "fieldtype": "Section Break",
+   "label": "Item Settings"
+  },
+  {
+   "fieldname": "payment_terms_section",
+   "fieldtype": "Section Break",
+   "label": "Payment Terms"
+  },
+  {
+   "fieldname": "payment_terms_assignments",
+   "fieldtype": "Table",
+   "label": "Payment Terms Assignments",
+   "options": "AI Workflow Payment Terms Assingment"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2024-10-11 10:31:07.264277",
+ "modified_by": "Administrator",
+ "module": "AI Workflows",
+ "name": "AI Workflow Purchase Invoice Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

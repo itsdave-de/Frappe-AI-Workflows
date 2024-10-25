@@ -4,6 +4,15 @@ app_publisher = "itsdave GmbH"
 app_description = "AI supported workflows for the Frappe Framework."
 app_email = "dev@itsdsave.de"
 app_license = "gpl-3.0"
+
+
+doc_events = {
+    "Purchase Invoice": {
+        "on_submit": "ai_workflows.ai_workflows.doctype.ai_query.ai_query.update_paperless_document_status",
+        "on_cancel": "ai_workflows.ai_workflows.doctype.ai_query.ai_query.update_paperless_document_status",
+    },
+}
+
 # required_apps = []
 
 # Includes in <head>
