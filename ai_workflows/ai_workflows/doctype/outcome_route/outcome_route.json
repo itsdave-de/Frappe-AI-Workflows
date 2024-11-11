@@ -1,0 +1,25 @@
+{
+  "doctype": "DocType",
+  "name": "Outcome Route",
+  "module": "AI Workflows",
+  "custom": 1,
+  "istable": 1,
+  "fields": [
+    {
+      "fieldname": "outcome_value",
+      "fieldtype": "Data",
+      "label": "Outcome Value",
+      "reqd": 1
+    },
+    {
+      "fieldname": "next_step",
+      "fieldtype": "Link",
+      "options": "Workflow Step",
+      "label": "Next Step",
+      "reqd": 1
+    }
+  ]
+}
+
+ 
+  
