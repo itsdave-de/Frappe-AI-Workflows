@@ -1,0 +1,66 @@
+{
+    "doctype": "DocType",
+    "name": "Workflow Template",
+    "module": "AI Workflows",
+    "custom": 1,
+    "fields": [
+      {
+        "fieldname": "workflow_name",
+        "fieldtype": "Data",
+        "label": "Workflow Name",
+        "reqd": 1
+      },
+      {
+        "fieldname": "applicable_doctypes",
+        "fieldtype": "Link",
+        "options": "DocType",
+        "label": "Applicable DocTypes",
+        "reqd": 1
+      },
+      {
+        "fieldname": "description",
+        "fieldtype": "Small Text",
+        "label": "Description"
+      },
+      {
+        "fieldname": "active",
+        "fieldtype": "Check",
+        "label": "Active",
+        "default": 1
+      },
+      {
+        "fieldname": "workflow_steps",
+        "fieldtype": "Table",
+        "options": "Workflow Step",
+        "label": "Workflow Steps",
+        "Ignore_user_permissions": 1
+      }
+      
+    ],
+    "permissions": [
+      {
+        "role": "System Manager",
+        "select":1,
+        "read": 1,
+        "write": 1,
+        "create": 1,
+        "delete": 1,
+        "submit": 1,
+        "cancel": 1,
+        "amend": 1
+      },
+      {
+        "role": "Administrator",
+        "select":1,
+        "read": 1,
+        "write": 1,
+        "create": 1,
+        "delete": 1,
+        "submit": 1,
+        "cancel": 1,
+        "amend": 1
+      }
+
+    ]
+  }
+  

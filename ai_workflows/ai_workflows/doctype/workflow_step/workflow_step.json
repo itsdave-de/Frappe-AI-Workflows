@@ -1,0 +1,100 @@
+{
+ "actions": [],
+ "creation": "2024-10-28 14:45:20.830263",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "step_name",
+  "sequence",
+  "step_type",
+  "action_type",
+  "method_name",
+  "decision_condition",
+  "outcome_routes",
+  "next_step",
+  "assigned_role",
+  "auto_proceed"
+ ],
+ "fields": [
+  {
+   "fieldname": "step_name",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Step Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sequence",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Sequence",
+   "reqd": 1
+  },
+  {
+   "fieldname": "step_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_preview": 1,
+   "label": "Step Type",
+   "options": "Action\nDecision",
+   "reqd": 1
+  },
+  {
+   "depends_on": "eval:doc.step_type == 'Action'",
+   "fieldname": "action_type",
+   "fieldtype": "Select",
+   "label": "Action Type",
+   "options": "Server Method\nClient Script\nApproval\nNotification"
+  },
+  {
+   "depends_on": "eval:doc.step_type == 'Action' && (doc.action_type == 'Server Method' || doc.action_type == 'Client Script')",
+   "fieldname": "method_name",
+   "fieldtype": "Data",
+   "label": "Method Name"
+  },
+  {
+   "depends_on": "eval:doc.step_type == 'Decision'",
+   "fieldname": "decision_condition",
+   "fieldtype": "Text",
+   "label": "Decision Condition"
+  },
+  {
+   "depends_on": "eval:doc.step_type == 'Decision'",
+   "fieldname": "outcome_routes",
+   "fieldtype": "Table",
+   "label": "Outcome Routes",
+   "options": "Outcome Route"
+  },
+  {
+   "depends_on": "eval:doc.step_type == 'Action'",
+   "fieldname": "next_step",
+   "fieldtype": "Link",
+   "label": "Next Step",
+   "options": "Workflow Step"
+  },
+  {
+   "fieldname": "assigned_role",
+   "fieldtype": "Link",
+   "label": "Assigned Role/User",
+   "options": "Role"
+  },
+  {
+   "default": "0",
+   "fieldname": "auto_proceed",
+   "fieldtype": "Check",
+   "label": "Auto Proceed"
+  }
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2024-10-28 15:30:21.422920",
+ "modified_by": "Administrator",
+ "module": "AI Workflows",
+ "name": "Workflow Step",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
