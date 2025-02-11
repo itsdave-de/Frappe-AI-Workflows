@@ -1,0 +1,39 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2024-10-11 09:53:40.546220",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "ai_response_paymentmethod_string",
+  "payment_term"
+ ],
+ "fields": [
+  {
+   "fieldname": "ai_response_paymentmethod_string",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "AI Response PaymentMethod String"
+  },
+  {
+   "fieldname": "payment_term",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Payment Term",
+   "options": "Payment Term"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-02-11 13:38:03.955547",
+ "modified_by": "Administrator",
+ "module": "AI Workflows",
+ "name": "AI Workflow Payment Terms Assingment",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
