@@ -130,7 +130,7 @@ def use_openai(doc, prompt, ai_name, background=True):
     new_query.document_type = prompt.for_doctype
     new_query.paperless_doc = doc.get("name")
     new_query.ai = ai_name
-    new_query.ai_prompt_template = prompt
+    new_query.ai_prompt_template = prompt.name
     new_query.effective_prompt = effective_prompt
     new_query.ai_response = resp.strip() if resp else ""
 
