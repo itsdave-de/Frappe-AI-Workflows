@@ -19,6 +19,12 @@ if 'frappe_goes_paperless' in frappe.get_installed_apps():
 class AIQuery(Document):
     pass
 
+
+# Fallbacks, falls im AI-Datensatz kein Modell hinterlegt ist.
+DEFAULT_MODEL_STRUCTURED = "gpt-4o-2024-08-06"
+DEFAULT_MODEL_CHAT = "chatgpt-4o-latest"
+
+
 # Get settings from AI doctype settings
 def get_ai_settings(doc_ai):
     doc_ai = frappe.get_doc("AI", doc_ai)
@@ -27,6 +33,20 @@ def get_ai_settings(doc_ai):
         doctype="AI", name=doc_ai.name, fieldname="api_key", raise_exception=False
     )
     return api_key
+
+
+def get_ai_client(ai_name):
+    """OpenAI-Client aus dem AI-Datensatz — inkl. optionalem eigenem Endpoint.
+
+    Das Feld `endpoint` trägt in Altbeständen einen Hinweistext statt einer URL;
+    deshalb wird es nur als base_url verwendet, wenn es wie eine URL aussieht.
+    """
+    doc_ai = frappe.get_doc("AI", ai_name)
+    kwargs = {"api_key": get_ai_settings(ai_name)}
+    endpoint = (doc_ai.endpoint or "").strip()
+    if endpoint.startswith("http"):
+        kwargs["base_url"] = endpoint
+    return OpenAI(**kwargs), doc_ai
 
 
 def get_country(code_country):
@@ -67,7 +87,7 @@ def call_ai(ai, prompt, doc, background=True):
 def use_openai(doc, prompt, ai_name, background=True):
     print("Initiate get ai data ...")
 
-    client = OpenAI(api_key=get_ai_settings(ai_name))
+    client, doc_ai = get_ai_client(ai_name)
     doc = json.loads(doc)
 
     # get prompt
@@ -81,7 +101,7 @@ def use_openai(doc, prompt, ai_name, background=True):
             else prompt.json_scema
         )
         chat_response = client.chat.completions.create(
-            model="gpt-4o-2024-08-06",
+            model=(doc_ai.model_structured or doc_ai.model or DEFAULT_MODEL_STRUCTURED),
             messages=[
                 {
                     "role": "system",
@@ -118,7 +138,7 @@ def use_openai(doc, prompt, ai_name, background=True):
                     "content": effective_prompt,
                 }
             ],
-            model="chatgpt-4o-latest",
+            model=(doc_ai.model or DEFAULT_MODEL_CHAT),
         )
         if chat_completion.choices:
             resp = chat_completion.choices[0].message.content

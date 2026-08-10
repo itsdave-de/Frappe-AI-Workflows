@@ -9,7 +9,9 @@
   "caption",
   "endpoint",
   "api_key",
-  "interface"
+  "interface",
+  "model",
+  "model_structured"
  ],
  "fields": [
   {
@@ -37,6 +39,18 @@
    "fieldtype": "Select",
    "label": "Interface",
    "options": "openAI"
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Modell",
+   "description": "Modellname, der an die API geht. Leer = eingebauter Default je Aufruf-Art."
+  },
+  {
+   "fieldname": "model_structured",
+   "fieldtype": "Data",
+   "label": "Modell (Structured Output)",
+   "description": "Nur wenn Structured Output ein anderes Modell braucht. Leer = Feld „Modell\"."
   }
  ],
  "index_web_pages_for_search": 1,
