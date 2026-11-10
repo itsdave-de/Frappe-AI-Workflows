@@ -4,11 +4,14 @@
 import json
 import re
 import frappe
+from frappe import _
 import random
 import string
 from frappe.model.document import Document
 from frappe.utils.password import get_decrypted_password
-from frappe.utils import getdate, validate_email_address, today
+from frappe.utils import getdate, validate_email_address, today, get_link_to_form
+from frappe.utils.file_lock import LockTimeoutError
+from frappe.utils.synchronization import filelock
 from openai import OpenAI
 from erpnext.controllers.accounts_controller import get_taxes_and_charges
 
@@ -397,7 +400,64 @@ def create_or_update_address(supplier, invoice_details):
 @frappe.whitelist()
 def create_purchase_invoice(doc):
     doc = json.loads(doc)
+    lock_key = re.sub(r"[^\w-]", "_", doc.get("paperless_doc") or doc.get("name") or "")
+    try:
+        with filelock(f"ai_query_pinv_{lock_key}", timeout=10):
+            frappe.db.commit()
+            ensure_no_invoice_for_paperless_doc(doc.get("paperless_doc"), doc.get("name"))
+            return _create_purchase_invoice(doc)
+    except LockTimeoutError:
+        frappe.throw(
+            _("A Purchase Invoice is already being created for this Paperless Document. Please wait and reload the page."),
+            title=_("Invoice is being created"),
+        )
 
+
+def get_invoice_for_paperless_doc(paperless_doc_name, ai_query_name=None):
+    candidates = []
+    if ai_query_name:
+        candidates.append(frappe.db.get_value("AI Query", ai_query_name, "document"))
+    if paperless_doc_name:
+        frappe_doctype, frappe_document = frappe.db.get_value(
+            "Paperless Document", paperless_doc_name, ["frappe_doctype", "frappe_document"]
+        ) or (None, None)
+        if frappe_doctype == "Purchase Invoice":
+            candidates.append(frappe_document)
+        if frappe.get_meta("Purchase Invoice").has_field("custom_paperless_document"):
+            candidates += frappe.get_all(
+                "Purchase Invoice",
+                filters={"custom_paperless_document": paperless_doc_name, "is_return": 0},
+                pluck="name",
+            )
+        candidates += frappe.get_all(
+            "AI Query",
+            filters={"paperless_doc": paperless_doc_name, "document": ["is", "set"]},
+            pluck="document",
+        )
+    for name in dict.fromkeys(c for c in candidates if c):
+        if frappe.db.get_value("Purchase Invoice", name, "docstatus") in (0, 1):
+            return name
+
+
+def ensure_no_invoice_for_paperless_doc(paperless_doc_name, ai_query_name=None):
+    existing = get_invoice_for_paperless_doc(paperless_doc_name, ai_query_name)
+    if not existing:
+        return
+    invoice_link = get_link_to_form("Purchase Invoice", existing)
+    if paperless_doc_name:
+        message = _(
+            "Paperless Document {0} already has Purchase Invoice {1}. No second invoice will be created. "
+            "If the existing invoice is wrong, cancel it or delete the draft first."
+        ).format(get_link_to_form("Paperless Document", paperless_doc_name), invoice_link)
+    else:
+        message = _(
+            "AI Query {0} already has Purchase Invoice {1}. No second invoice will be created. "
+            "If the existing invoice is wrong, cancel it or delete the draft first."
+        ).format(get_link_to_form("AI Query", ai_query_name), invoice_link)
+    frappe.throw(message, title=_("Invoice already exists"))
+
+
+def _create_purchase_invoice(doc):
     # Get JSON data
     json_data_str = doc.get("ai_response_json")
 
@@ -764,11 +824,27 @@ def update_paperless_document_status(doc, method):
         return
 
     if method == "on_submit":
+        current = paperless_doc.frappe_document
+        if (
+            paperless_doc.frappe_doctype == "Purchase Invoice"
+            and current
+            and current != doc.name
+            and frappe.db.get_value("Purchase Invoice", current, "docstatus") in (0, 1)
+        ):
+            frappe.throw(
+                _("Paperless Document {0} is already linked to Purchase Invoice {1}. This invoice will not be submitted.").format(
+                    get_link_to_form("Paperless Document", paperless_doc_name),
+                    get_link_to_form("Purchase Invoice", current),
+                ),
+                title=_("Paperless Document already booked"),
+            )
         # Update fields upon submission
         paperless_doc.status = "Workflow Successful"
         paperless_doc.frappe_doctype = "Purchase Invoice"
         paperless_doc.frappe_document = doc.name
     elif method == "on_cancel":
+        if paperless_doc.frappe_document not in (None, "", doc.name):
+            return
         # Update status upon cancellation
         paperless_doc.status = "Destination Document Cancelled"
         # Optionally clear fields
@@ -785,3 +861,27 @@ def generate_item_number():
     # Generate a random combination of 10 digits and letters
     random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=10))
     return f"AI-{random_part}"
+
+
+def validate_unique_paperless_document(doc, method=None):
+    paperless_doc_name = doc.get("custom_paperless_document")
+    if not paperless_doc_name or doc.get("is_return"):
+        return
+    other = frappe.db.get_value(
+        "Purchase Invoice",
+        {
+            "custom_paperless_document": paperless_doc_name,
+            "name": ["!=", doc.name],
+            "docstatus": ["!=", 2],
+            "is_return": 0,
+        },
+        "name",
+    )
+    if other:
+        frappe.throw(
+            _("Paperless Document {0} already belongs to Purchase Invoice {1}. If this is a different invoice, clear the Paperless Document field.").format(
+                get_link_to_form("Paperless Document", paperless_doc_name),
+                get_link_to_form("Purchase Invoice", other),
+            ),
+            title=_("Paperless Document already in use"),
+        )

@@ -1,0 +1,9 @@
+A Purchase Invoice is already being created for this Paperless Document. Please wait and reload the page.,Für dieses Paperless-Dokument wird gerade bereits eine Eingangsrechnung erzeugt. Bitte warten und die Seite neu laden.
+Invoice is being created,Rechnung wird bereits erzeugt
+"Paperless Document {0} already has Purchase Invoice {1}. No second invoice will be created. If the existing invoice is wrong, cancel it or delete the draft first.","Für das Paperless-Dokument {0} gibt es bereits die Eingangsrechnung {1}. Eine zweite Rechnung wird nicht erzeugt. Ist die vorhandene Rechnung falsch, diese zuerst stornieren bzw. den Entwurf löschen."
+"AI Query {0} already has Purchase Invoice {1}. No second invoice will be created. If the existing invoice is wrong, cancel it or delete the draft first.","Für die AI Query {0} gibt es bereits die Eingangsrechnung {1}. Eine zweite Rechnung wird nicht erzeugt. Ist die vorhandene Rechnung falsch, diese zuerst stornieren bzw. den Entwurf löschen."
+Invoice already exists,Rechnung bereits vorhanden
+Paperless Document {0} is already linked to Purchase Invoice {1}. This invoice will not be submitted.,Das Paperless-Dokument {0} ist bereits mit der Eingangsrechnung {1} verknüpft. Diese Rechnung wird deshalb nicht gebucht.
+Paperless Document already booked,Paperless-Dokument bereits verbucht
+"Paperless Document {0} already belongs to Purchase Invoice {1}. If this is a different invoice, clear the Paperless Document field.","Das Paperless-Dokument {0} gehört bereits zur Eingangsrechnung {1}. Ist das hier eine andere Rechnung, das Feld Paperless Document leeren."
+Paperless Document already in use,Paperless-Dokument bereits verwendet

@@ -8,6 +8,7 @@ app_license = "gpl-3.0"
 
 doc_events = {
     "Purchase Invoice": {
+        "validate": "ai_workflows.ai_workflows.doctype.ai_query.ai_query.validate_unique_paperless_document",
         "on_submit": "ai_workflows.ai_workflows.doctype.ai_query.ai_query.update_paperless_document_status",
         "on_cancel": "ai_workflows.ai_workflows.doctype.ai_query.ai_query.update_paperless_document_status",
     },
