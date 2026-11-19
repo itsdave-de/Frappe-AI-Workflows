@@ -688,6 +688,9 @@ def create_purchase_invoice(doc):
 
 
 
+ITEM_CODE_FROM_NAMING_RULE = "neu"
+
+
 def create_or_get_item(
     supplier_item_code,
     item_name,
@@ -714,9 +717,7 @@ def create_or_get_item(
     item = frappe.get_doc(
         {
             "doctype": "Item",
-            "item_code": frappe.model.naming.make_autoname(
-                "ITEM-.#####"
-            ),  # Determine item_code by naming series
+            "item_code": ITEM_CODE_FROM_NAMING_RULE,
             "item_name": item_name,
             "description": item_description,
             "item_group": item_group,
