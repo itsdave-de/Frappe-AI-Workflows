@@ -7,3 +7,5 @@ Paperless Document {0} is already linked to Purchase Invoice {1}. This invoice w
 Paperless Document already booked,Paperless-Dokument bereits verbucht
 "Paperless Document {0} already belongs to Purchase Invoice {1}. If this is a different invoice, clear the Paperless Document field.","Das Paperless-Dokument {0} gehört bereits zur Eingangsrechnung {1}. Ist das hier eine andere Rechnung, das Feld Paperless Document leeren."
 Paperless Document already in use,Paperless-Dokument bereits verwendet
+Supplier {0} matches this invoice but is disabled. Enable it or select the correct supplier manually.,"Der Lieferant {0} passt zu dieser Rechnung, ist aber deaktiviert. Lieferant aktivieren oder den richtigen Lieferanten von Hand auswählen."
+Supplier disabled,Lieferant deaktiviert

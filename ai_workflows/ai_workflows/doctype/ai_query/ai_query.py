@@ -188,6 +188,54 @@ def use_openai(doc, prompt, ai_name, background=True):
     else:
         return f'AI query sucessfull. <a href="{frappe.utils.get_url()}/app/ai-query/{new_query.name}">Check out response</a>.'
 
+def normalize_tax_id(tax_id):
+    return "".join((tax_id or "").split()).upper() or None
+
+
+def get_own_tax_ids():
+    return {normalize_tax_id(t) for t in frappe.get_all("Company", pluck="tax_id") if t}
+
+
+def find_supplier(tax_id, supplier_name):
+    candidates = []
+    if tax_id:
+        candidates = frappe.db.sql(
+            """select name, disabled from `tabSupplier`
+            where upper(replace(ifnull(tax_id, ''), ' ', '')) = %s
+            order by disabled, creation""",
+            tax_id,
+            as_dict=True,
+        )
+    if not candidates and supplier_name:
+        candidates = frappe.get_all(
+            "Supplier",
+            filters={"supplier_name": supplier_name},
+            fields=["name", "disabled"],
+            order_by="disabled asc, creation asc",
+        )
+    if not candidates and supplier_name:
+        candidates = frappe.db.sql(
+            """select pi.supplier as name, s.disabled
+            from `tabPurchase Invoice` pi
+            join `tabSupplier` s on s.name = pi.supplier
+            where pi.supplier_name = %s and pi.docstatus = 1
+            order by s.disabled, pi.posting_date desc
+            limit 1""",
+            supplier_name,
+            as_dict=True,
+        )
+    if not candidates:
+        return None
+    if candidates[0].disabled:
+        frappe.throw(
+            _("Supplier {0} matches this invoice but is disabled. Enable it or select the correct supplier manually.").format(
+                get_link_to_form("Supplier", candidates[0].name)
+            ),
+            title=_("Supplier disabled"),
+        )
+    return candidates[0].name
+
+
 @frappe.whitelist()
 def create_supplier(doc):
     doc = json.loads(doc)
@@ -202,21 +250,13 @@ def create_supplier(doc):
         return "Invalid JSON format"
 
     invoice_details = json_data.get("InvoiceDetails")
-    supplier_ust_id = invoice_details.get("SupplierUstId")
+    supplier_ust_id = normalize_tax_id(invoice_details.get("SupplierUstId"))
     supplier_name = invoice_details.get("SupplierName")
 
-    # First, try to find the supplier by tax_id (SupplierUstId)
-    supplier = None
-    if supplier_ust_id:
-        supplier = frappe.db.get_value("Supplier", {"tax_id": supplier_ust_id}, "name")
+    if supplier_ust_id in get_own_tax_ids():
+        supplier_ust_id = None
 
-    # If supplier not found by tax_id, fall back to supplier_name
-    if not supplier:
-        supplier = frappe.db.get_value(
-            "Supplier", {"supplier_name": supplier_name}, "name"
-        )
-
-    # When its there, we need to fetch the Document
+    supplier = find_supplier(supplier_ust_id, supplier_name)
     if supplier:
         supplier = frappe.get_doc("Supplier", supplier)
 
@@ -235,11 +275,9 @@ def create_supplier(doc):
         print(f"Supplier '{supplier.supplier_name}' created successfully!")
         return_msg = "Supplier created successfully"
     else:
-        # Update the existing supplier with the tax_id if not already set
-        supplier_doc = frappe.get_doc("Supplier", supplier)
-        if supplier_ust_id and not supplier_doc.tax_id:
-            supplier_doc.tax_id = supplier_ust_id
-            supplier_doc.save()
+        if supplier_ust_id and not supplier.tax_id:
+            supplier.tax_id = supplier_ust_id
+            supplier.save()
         return_msg = "Supplier already exists, updated successfully"
 
     # Update AI Query with supplier
