@@ -298,141 +298,112 @@ def create_supplier(doc):
     return return_msg
 
 
-def create_or_update_contact(supplier, invoice_details, address_name):
-    print("create_or_update_contact")
-    contact_person = invoice_details.get(
-        "SupplierContactPerson", supplier.supplier_name
-    ).split(" ")
-    contact_phone = invoice_details.get("SupplierContactPhone", "")
-    contact_email = invoice_details.get("SupplierContactEmail", "")
-
-    
-
-    # Fetch the contact based on the first and last name
-    contact_name = frappe.db.get_value(
-        "Contact",
-        {
-            "first_name": contact_person[0],
-            "last_name": contact_person[1] if len(contact_person) > 1 else "",
+def _linked_names(doctype, supplier_name):
+    return frappe.get_all(
+        "Dynamic Link",
+        filters={
+            "parenttype": doctype,
+            "link_doctype": "Supplier",
+            "link_name": supplier_name,
         },
-        "name"  # Fetch the contact name, not the full document
+        pluck="parent",
     )
 
-    # If no contact found, create a new one
+
+def _norm(value):
+    return re.sub(r"[^a-z0-9]", "", (value or "").lower())
+
+
+def create_or_update_contact(supplier, invoice_details, address_name):
+    person = (invoice_details.get("SupplierContactPerson") or "").strip()
+    contact_phone = (invoice_details.get("SupplierContactPhone") or "").strip()
+    contact_email = (invoice_details.get("SupplierContactEmail") or "").strip()
+    if contact_email and not validate_email_address(contact_email):
+        contact_email = ""
+
+    parts = person.split(" ", 1) if person else []
+    first_name = parts[0] if parts else supplier.supplier_name
+    last_name = parts[1] if len(parts) > 1 else ""
+
+    linked = _linked_names("Contact", supplier.name)
+    contact_name = None
+    if linked and contact_email:
+        contact_name = frappe.db.get_value(
+            "Contact Email",
+            {"parent": ["in", linked], "parenttype": "Contact", "email_id": contact_email},
+            "parent",
+        )
+    if linked and not contact_name and person:
+        for row in frappe.get_all("Contact", filters={"name": ["in", linked]}, fields=["name", "first_name", "last_name"]):
+            if _norm(row.first_name) == _norm(first_name) and _norm(row.last_name) == _norm(last_name):
+                contact_name = row.name
+                break
+    if linked and not contact_name and not person and not contact_email:
+        contact_name = supplier.supplier_primary_contact if supplier.supplier_primary_contact in linked else linked[0]
+
     if not contact_name:
         contact = frappe.new_doc("Contact")
-        contact.first_name = contact_person[0]
-        contact.last_name = contact_person[1] if len(contact_person) > 1 else ""
-        contact.company_name = supplier.supplier_name  # Link the contact to the supplier's name
-        contact.address = address_name  # Link the contact to the address
-
-        contact.append(
-            "links", {"link_doctype": "Supplier", "link_name": supplier.name}
-        )
-
+        contact.first_name = first_name
+        contact.last_name = last_name
+        contact.company_name = supplier.supplier_name
+        contact.address = address_name
+        contact.append("links", {"link_doctype": "Supplier", "link_name": supplier.name})
         if contact_phone:
             contact.append("phone_nos", {"phone": contact_phone, "is_primary_phone": 1})
-
         if contact_email:
-            if validate_email_address(contact_email):
-                contact.append("email_ids", {"email_id": contact_email, "is_primary": 1})
-
+            contact.append("email_ids", {"email_id": contact_email, "is_primary": 1})
         contact.insert()
-        contact_name = contact.name  # Ensure we set the correct contact name
+        contact_name = contact.name
     else:
-        # Fetch the existing contact as a document
         contact = frappe.get_doc("Contact", contact_name)
-        contact.company_name = supplier.supplier_name  # Ensure the company name is updated
-        contact.address = address_name  # Ensure the address is linked
+        changed = False
+        if address_name and not contact.address:
+            contact.address = address_name
+            changed = True
+        if contact_phone and not any(p.phone == contact_phone for p in contact.phone_nos):
+            contact.append("phone_nos", {"phone": contact_phone, "is_primary_phone": 0 if contact.phone_nos else 1})
+            changed = True
+        if contact_email and not any(e.email_id == contact_email for e in contact.email_ids):
+            contact.append("email_ids", {"email_id": contact_email, "is_primary": 0 if contact.email_ids else 1})
+            changed = True
+        if changed:
+            contact.save()
 
-        if contact_phone:
-            existing_phone = next(
-                (
-                    phone
-                    for phone in contact.phone_nos
-                    if phone.phone == contact_phone
-                ),
-                None,
-            )
-            if not existing_phone:
-                contact.append(
-                    "phone_nos",
-                    {
-                        "phone": contact_phone,
-                        "is_primary_phone": 1 if not contact.phone_nos else 0,
-                    },
-                )
-
-        if contact_email:
-            existing_email = next(
-                (
-                    email
-                    for email in contact.email_ids
-                    if email.email_id == contact_email
-                ),
-                None,
-            )
-            if not existing_email:
-                contact.append(
-                    "email_ids",
-                    {
-                        "email_id": contact_email,
-                        "is_primary": 1 if not contact.email_ids else 0,
-                    },
-                )
-
-        if not any(link.link_name == supplier.name for link in contact.links):
-            contact.append(
-                "links", {"link_doctype": "Supplier", "link_name": supplier.name}
-            )
-        contact.save()
-
-    # Assign the contact name to supplier's primary contact
-    supplier.supplier_primary_contact = contact_name
+    if not supplier.supplier_primary_contact or supplier.supplier_primary_contact not in _linked_names("Contact", supplier.name):
+        supplier.supplier_primary_contact = contact_name
     return supplier
-
 
 
 def create_or_update_address(supplier, invoice_details):
-    print("create_or_update_address")
-    # Fetch the address name if it exists
-    address_name = frappe.db.get_value(
-        "Address",
-        {
-            "address_line1": invoice_details["SupplierAddress"]["Street"],
-            "city": invoice_details["SupplierAddress"]["City"],
-            "pincode": invoice_details["SupplierAddress"]["PostalCode"],
-            "country": get_country(invoice_details["SupplierAddress"]["Country"]),
-        },
-    )
+    data = invoice_details.get("SupplierAddress") or {}
+    street = (data.get("Street") or "").strip()
+    city = (data.get("City") or "").strip()
+    pincode = (data.get("PostalCode") or "").strip()
+    country = get_country(data.get("Country"))
 
-    if not address_name:
-        print("Creating new address")
-        # Create a new address document
+    linked = _linked_names("Address", supplier.name)
+    address_name = None
+    if linked:
+        for row in frappe.get_all("Address", filters={"name": ["in", linked]}, fields=["name", "address_line1", "pincode"]):
+            if _norm(row.address_line1) == _norm(street) and _norm(row.pincode) == _norm(pincode):
+                address_name = row.name
+                break
+
+    if not address_name and street:
         address_doc = frappe.new_doc("Address")
-        address_doc.address_title = f"{supplier.supplier_name} - Main Address"
-        address_doc.address_line1 = invoice_details["SupplierAddress"]["Street"]
-        address_doc.city = invoice_details["SupplierAddress"]["City"]
-        address_doc.pincode = invoice_details["SupplierAddress"]["PostalCode"]
-        address_doc.country = get_country(invoice_details["SupplierAddress"]["Country"])
-        address_doc.append(
-            "links", {"link_doctype": "Supplier", "link_name": supplier.name}
-        )
+        address_doc.address_title = supplier.supplier_name
+        address_doc.address_line1 = street
+        address_doc.city = city
+        address_doc.pincode = pincode
+        address_doc.country = country
+        address_doc.append("links", {"link_doctype": "Supplier", "link_name": supplier.name})
         address_doc.insert()
-    else:
-        # If the address exists, load the address document
-        address_doc = frappe.get_doc("Address", address_name)
-        # Check if the supplier link already exists
-        if not any(link.link_name == supplier.name for link in address_doc.links):
-            address_doc.append(
-                "links", {"link_doctype": "Supplier", "link_name": supplier.name}
-            )
-            address_doc.save()
+        address_name = address_doc.name
+        linked.append(address_name)
 
-    # Update the supplier's primary address with the name of the address
-    supplier.supplier_primary_address = address_doc.name
+    if address_name and (not supplier.supplier_primary_address or supplier.supplier_primary_address not in linked):
+        supplier.supplier_primary_address = address_name
     return supplier
-
 
 
 @frappe.whitelist()
